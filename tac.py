@@ -2,24 +2,26 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function
+import copy
 
 class player:
     X = 'X'
     O = 'O'
+    BLANK = ' '
 
 class Board(object):
     def __init__(self):
-        self._board = [[' ']*3 for i in range(3)]
+        self._board = [[player.BLANK]*3 for i in range(3)]
 
     def __setitem__(self, indices, val):
-        """Set the value of the cell at 'row' 'col' to the value 'val',
+        """Set the value of the cell at 'row', 'col' to the value 'val',
         assuming cell is unoccupied"""
         row, col = indices
-        if self._board[row][col] == ' ':
+        if self._board[row][col] == player.BLANK:
             self._board[row][col] = val
         else:
             raise ValueError("That's an invalid move you big dumb")
-    
+
     def __getitem__(self, indices):
         """Get the value of the board cell at 'row', 'col'. As an example, you
         may access the board @ row 1, column 2 like so: board[1, 2]
@@ -34,10 +36,14 @@ class Board(object):
         moves = []
         for r, row in enumerate(self._board):
             for c, col in enumerate(row):
-                if col == ' ':
+                if col == player.BLANK:
                     moves.append((r,c))
         return moves
-    
+
+    def copy(self):
+        board = self.__class__()
+        board._board = copy.deepcopy(self._board)
+
     def __str__(self):
         """Return visual representation of tic-tac-toe board"""
         return "─┼─┼─\n".join(["│".join(row)+'\n' for row in self._board])
@@ -56,7 +62,8 @@ class Vhat(object):
 
     def __init__(self, me_symbol, weights):
         self.me = me_symbol
-        self.blank = ' '
+        if not len(weights) == 6:
+            raise ValueError("Weights can only be a list of 6 numbers, has wrong length")
         self.z = weights
         # create a set of row/column/diagonal coordinates
         self.rows = []
@@ -73,9 +80,20 @@ class Vhat(object):
                 [(0, 2), (1, 1), (2, 0)],
                 ]
 
+    def get_next_board_moves(self, board):
+        """get list of next possible board moves, with respective board
+        states, and board score
+        """
+        next_states = []
+        for r, c in board.get_legal_moves():
+            copy = board.copy()
+            copy[r, c] = self.me
+            next_states.append(copy)
+        return next_states
+
     def get_middle_me(self, board):
         if board[1, 1] == self.me:
-            return self.z[0]
+            return 1
         return 0
 
     def get_corner_me(self,board):
@@ -83,7 +101,7 @@ class Vhat(object):
         for row, col in [(0,0), (2,2), (0,2), (2,0)]:
             if board[row, col] == self.me:
                 corners += 1
-        return corners * self.z[4]
+        return corners
 
     def get_near_complete_sequence_count(self, board):
         """return number of almost completed sequences where 2 of the
@@ -91,7 +109,7 @@ class Vhat(object):
         is open
         """
         sequence_almost_done = lambda sequence: sequence.count(self.me) == 2 and \
-                               sequence.count(self.blank) == 1
+                               sequence.count(player.BLANK) == 1
         score = 0
         for genre in (self.columns, self.diagonals, self.rows):
             for sequence in genre:
@@ -102,7 +120,7 @@ class Vhat(object):
 
     def get_near_losing_sequence_count(self, board):
         sequence_almost_done = lambda sequence: sequence.count(self.me) == 0 and \
-                               sequence.count(self.blank) == 1
+                               sequence.count(player.BLANK) == 1
         score = 0
         for genre in (self.columns, self.diagonals, self.rows):
             for sequence in genre:
@@ -110,7 +128,7 @@ class Vhat(object):
                 if sequence_almost_done(symbols):
                     score += 1
         return score
-    
+
     def get_winning_count(self, board):
         sequence_completed = lambda sequence: sequence.count(self.me) == 3
         score = 0
@@ -123,13 +141,26 @@ class Vhat(object):
 
     def get_losing_count(self, board):
         sequence_completed = lambda sequence: sequence.count(self.me) == 0 and \
-                             sequence.count(self.blank) == 0
+                             sequence.count(player.BLANK) == 0
         score = 0
         for genre in (self.columns, self.diagonals, self.rows):
             for sequence in genre:
                 symbols = [board[r, c] for r, c in sequence]
                 if sequence_completed(symbols):
                     score += 1
+        return score
+
+    def score_board(self, board):
+        """score the given board by the sum of the weights * their
+        respective evaluation criteria
+        """
+        scoring_functions = [self.get_corner_me, self.get_middle_me,
+                self.get_losing_count, self.get_winning_count,
+                self.get_near_complete_sequence_count,
+                self.get_near_complete_sequence_count]
+        score = 0
+        for weight, score_fxn in zip(self.z, scoring_functions):
+            score += weight * score_fxn(board)
         return score
 
 
