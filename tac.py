@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function
+import random
 import copy
 
 class player:
@@ -40,9 +41,11 @@ class Board(object):
                     moves.append((r,c))
         return moves
 
+
     def copy(self):
         board = self.__class__()
         board._board = copy.deepcopy(self._board)
+        return board
 
     def __str__(self):
         """Return visual representation of tic-tac-toe board"""
@@ -88,8 +91,16 @@ class Vhat(object):
         for r, c in board.get_legal_moves():
             copy = board.copy()
             copy[r, c] = self.me
-            next_states.append(copy)
+            score = self.score_board(copy)
+            move = (r, c)
+            next_states.append((score, move, copy))
         return next_states
+
+    def get_best_next_move(self, board):
+        next_states = self.get_next_board_moves(board)
+        next_states.sort()
+        _, move, _ = next_states[0]
+        return move
 
     def get_middle_me(self, board):
         if board[1, 1] == self.me:
@@ -163,11 +174,27 @@ class Vhat(object):
             score += weight * score_fxn(board)
         return score
 
+    def is_game_over(self, board):
+        """tells if the board has been completed"""
+        board_set = set()
+        for genre in (self.columns, self.diagonals, self.rows):
+            for sequence in genre:
+                symbols = set([board[r, c] for r, c in sequence])
+                board_set = board_set | symbols
+                if len(symbols) == 1 and ' ' not in symbols:
+                    return True
+        if ' ' not in board_set:
+            # catskill reached
+            return True
+        return False
+
+
 
 if __name__ == '__main__':
     print("nothing is happening so far")
     board = Board()
-    vhat = Vhat(player.X, None)
+    vhat = Vhat(player.X, [random.randint(-30, 30) for _ in range(6)])
+    opponent = Vhat(player.O, [random.randint(-30, 30) for _ in range(6)])
     board[1, 1] = player.X
     board[0, 0] = player.X
     board[0, 1] = player.X
@@ -181,4 +208,21 @@ if __name__ == '__main__':
     print('number of almost completed O sequence', vhat.get_near_losing_sequence_count(board))
     print('number of winning sequences', vhat.get_winning_count(board))
     print('number of losing sequences', vhat.get_losing_count(board))
+    print(vhat.score_board(board))
+    move = vhat.get_best_next_move(board)
+    print(move)
+    # reset board for new game
+    board = Board()
+    players = [vhat, opponent]
+    turn = 0
+    while not vhat.is_game_over(board):
+        current = players[turn%len(players)]
+        turn += 1
+        r, c = current.get_best_next_move(board)
+        board[r, c] = current.me
+    print(board)
+
+
+
+
 
