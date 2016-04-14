@@ -4,6 +4,11 @@
 from __future__ import print_function
 import random
 import copy
+from collections import defaultdict
+import itertools
+
+# ONCE AND FOR ALL
+from pprint import pprint
 
 class player:
     X = 'X'
@@ -63,11 +68,11 @@ class Vhat(object):
     approximation of the state of the board.
     """
 
-    def __init__(self, me_symbol, weights):
-        self.me = me_symbol
+    def __init__(self, weights):
         if not len(weights) == 6:
             raise ValueError("Weights can only be a list of 6 numbers, has wrong length")
-        self.z = weights
+        self.weights = weights
+        self.generation = 0
         # create a set of row/column/diagonal coordinates
         self.rows = []
         for r in range(3):
@@ -82,6 +87,9 @@ class Vhat(object):
                 [(0, 0), (1, 1), (2, 2)],
                 [(0, 2), (1, 1), (2, 0)],
                 ]
+
+    def set_symbol(self, me_symbol):
+        self.me = me_symbol
 
     def get_next_board_moves(self, board):
         """get list of next possible board moves, with respective board
@@ -168,14 +176,16 @@ class Vhat(object):
         scoring_functions = [self.get_corner_me, self.get_middle_me,
                 self.get_losing_count, self.get_winning_count,
                 self.get_near_complete_sequence_count,
-                self.get_near_complete_sequence_count]
+                self.get_near_losing_sequence_count]
         score = 0
-        for weight, score_fxn in zip(self.z, scoring_functions):
+        for weight, score_fxn in zip(self.weights, scoring_functions):
             score += weight * score_fxn(board)
         return score
 
     def is_game_over(self, board):
         """tells if the board has been completed"""
+        # Check all the sequences of three moves, and if there's one non-blank
+        # sequence of three the game is over.
         board_set = set()
         for genre in (self.columns, self.diagonals, self.rows):
             for sequence in genre:
@@ -183,44 +193,92 @@ class Vhat(object):
                 board_set = board_set | symbols
                 if len(symbols) == 1 and ' ' not in symbols:
                     return True
+        # If there are no blank spaces on the board
         if ' ' not in board_set:
             # catskill reached
             return True
         return False
 
+    def __str__(self):
+        """Oh i just love printing."""
+        return str(self.weights) + ' ' + str(self.generation)
+
+    __repr__ = __str__
+
+
+def create_random_vhat():
+    return Vhat([random.randint(-30, 30) for _ in range(6)])
+
+
+def play_game(tally, player1, player2):
+    """given a dictionary (tally) of player to winning count (tally).
+    Play two players against each other, allowing each to play 1st.
+    """
+    board = Board()
+    player1.set_symbol(player.X)
+    player2.set_symbol(player.O)
+    players = [player2, player1]
+    for _ in range(2):
+        # play two games, swapping turn order
+        players = list(reversed(players))
+        board = Board()
+        turn = 0
+        while not player1.is_game_over(board):
+            current = players[turn % len(players)]
+            r, c = current.get_best_next_move(board)
+            board[r, c] = current.me
+            turn += 1
+        # increase tally for winning player
+        tally[player1] += player1.get_winning_count(board) > 0
+        tally[player2] += player2.get_winning_count(board) > 0
+
+
+def mix_genetics(parent1, parent2):
+    """Return the average of the weights of the two parents."""
+    mixed_dna = []
+    for w1, w2 in zip(parent1.weights, parent2.weights):
+        mixed_dna.append((w1 + w2) / 2)
+
+    child = Vhat(mixed_dna)
+
+    return child
+
+
+def play_round(tally, generation):
+    for vhat1, vhat2 in itertools.combinations(tally, 2):
+        play_game(tally, vhat1, vhat2)
+    pool_size = len(tally)
+    ranked = list((score, vhatter) for vhatter, score in tally.items())
+    ranked.sort()
+    ranked.reverse()
+    pprint(ranked)
+    breeders = ranked[:len(ranked) // 4]
+    random.shuffle(breeders)
+    tally = {}
+    for (_, parent1), (_, parent2) in zip(breeders[1::2], breeders[::2]):
+        child = mix_genetics(parent1, parent2)
+        child.generation = generation
+        for entrant in (parent1, parent2, child):
+            tally[entrant] = 0
+    while len(tally) < pool_size:
+        stranger = create_random_vhat()
+        stranger.generation = generation
+        tally[stranger] = 0
+    return tally, generation+1
 
 
 if __name__ == '__main__':
-    print("nothing is happening so far")
-    board = Board()
-    vhat = Vhat(player.X, [random.randint(-30, 30) for _ in range(6)])
-    opponent = Vhat(player.O, [random.randint(-30, 30) for _ in range(6)])
-    board[1, 1] = player.X
-    board[0, 0] = player.X
-    board[0, 1] = player.X
-    board[0, 2] = player.O
-    board[1, 2] = player.O
-    board[2, 2] = player.X
-    print(board)
-    print(board[1, 1])
-    print(board.get_legal_moves())
-    print('number of almost completed X sequence', vhat.get_near_complete_sequence_count(board))
-    print('number of almost completed O sequence', vhat.get_near_losing_sequence_count(board))
-    print('number of winning sequences', vhat.get_winning_count(board))
-    print('number of losing sequences', vhat.get_losing_count(board))
-    print(vhat.score_board(board))
-    move = vhat.get_best_next_move(board)
-    print(move)
-    # reset board for new game
-    board = Board()
-    players = [vhat, opponent]
-    turn = 0
-    while not vhat.is_game_over(board):
-        current = players[turn%len(players)]
-        turn += 1
-        r, c = current.get_best_next_move(board)
-        board[r, c] = current.me
-    print(board)
+    tally0 = {create_random_vhat(): 0 for _ in range(20)}
+    # top two players
+
+    generation = 0
+    tally, generation = play_round(tally0, generation)
+    for _ in range(500):
+        print(generation)
+        tally, generation = play_round(tally, generation)
+
+
+
 
 
 
