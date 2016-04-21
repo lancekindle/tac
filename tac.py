@@ -57,10 +57,12 @@ class Board(object):
         return "─┼─┼─\n".join(["│".join(row)+'\n' for row in self._board])
 
 
-class Vhat(object):
-    """Vhat is responsible for evaluating a given board and returning a value
+class Competitor(object):
+    """Competitor is responsible for evaluating a given board and returning a value
     that represents (in arbitrary numerical form) the likelyhood of winning
-    this board game
+    this board game. In addition it contains a method "get_best_next_move"
+    which will evaluate any given board and return the move that it deems
+    best.
 
     This numerical representation is calculated as a series of board
     "markers" (such as how many 2-in a row's do I have?) multiplied by
@@ -68,7 +70,12 @@ class Vhat(object):
     approximation of the state of the board.
     """
 
-    def __init__(self, weights):
+    def __init__(self, weights=None):
+        """if Competitor is not given any weights, a set of random
+        weights will be created
+        """
+        if weights is None:
+            weights = [random.randint(-30, 30) for _ in range(6)]
         if not len(weights) == 6:
             raise ValueError("Weights can only be a list of 6 numbers, has wrong length")
         self.weights = weights
@@ -107,7 +114,8 @@ class Vhat(object):
     def get_best_next_move(self, board):
         next_states = self.get_next_board_moves(board)
         next_states.sort()
-        _, move, _ = next_states[0]
+        # Get state with the LARGEST score
+        _, move, _ = next_states[-1]
         return move
 
     def get_middle_me(self, board):
@@ -206,12 +214,9 @@ class Vhat(object):
     __repr__ = __str__
 
 
-def create_random_vhat():
-    return Vhat([random.randint(-30, 30) for _ in range(6)])
 
-
-def play_game(tally, player1, player2):
-    """given a dictionary (tally) of player to winning count (tally).
+def play_game(leaderboard, player1, player2):
+    """given a dictionary (leaderboard) of player to winning count.
     Play two players against each other, allowing each to play 1st.
     """
     board = Board()
@@ -228,54 +233,104 @@ def play_game(tally, player1, player2):
             r, c = current.get_best_next_move(board)
             board[r, c] = current.me
             turn += 1
-        # increase tally for winning player
-        tally[player1] += player1.get_winning_count(board) > 0
-        tally[player2] += player2.get_winning_count(board) > 0
+        # increase score on leaderboard for winning player
+        leaderboard[player1] += player1.get_winning_count(board) > 0
+        leaderboard[player2] += player2.get_winning_count(board) > 0
 
 
-def mix_genetics(parent1, parent2):
-    """Return the average of the weights of the two parents."""
+def mix_genetics(parent1, parent2, generation_count):
+    """Return the average of the weights of the two parents, with
+    some random mutations thrown in
+    """
     mixed_dna = []
     for w1, w2 in zip(parent1.weights, parent2.weights):
-        mixed_dna.append((w1 + w2) / 2)
+        # Mutate value +/- 1, about 20% of the time
+        mutation = 0
+        if not random.randint(0, 3):
+            mutation = random.randint(-1, 1)
 
-    child = Vhat(mixed_dna)
+        mixed_dna.append(((w1 + w2) / 2) + mutation)
+
+    child = Competitor(mixed_dna)
+    child.generation = generation_count
 
     return child
 
 
-def play_round(tally, generation):
-    for vhat1, vhat2 in itertools.combinations(tally, 2):
-        play_game(tally, vhat1, vhat2)
-    pool_size = len(tally)
-    ranked = list((score, vhatter) for vhatter, score in tally.items())
+def play_tournament_round(leaderboard, generation):
+    for player1, player2 in itertools.combinations(leaderboard, 2):
+        play_game(leaderboard, player1, player2)
+    pool_size = len(leaderboard)
+    ranked = list((score, vhatter) for vhatter, score in leaderboard.items())
     ranked.sort()
     ranked.reverse()
     pprint(ranked)
-    breeders = ranked[:len(ranked) // 4]
+
+    # eliminate lower-scoring players
+    breeders = ranked[:len(ranked) // 2]
     random.shuffle(breeders)
-    tally = {}
+    leaderboard = {}
+
+    # for remaining players, breed them and produce 1 child for each two players
     for (_, parent1), (_, parent2) in zip(breeders[1::2], breeders[::2]):
-        child = mix_genetics(parent1, parent2)
-        child.generation = generation
+        child = mix_genetics(parent1, parent2, generation)
         for entrant in (parent1, parent2, child):
-            tally[entrant] = 0
-    while len(tally) < pool_size:
-        stranger = create_random_vhat()
+            leaderboard[entrant] = 0
+
+    # add new random players until leaderboard is filled
+    while len(leaderboard) < pool_size:
+        # Creates Competitor with random weights
+        stranger = Competitor()
         stranger.generation = generation
-        tally[stranger] = 0
-    return tally, generation+1
+        leaderboard[stranger] = 0
+
+    return leaderboard, generation+1
+
+# (22, [1, 12, -4, 16, 12, -2] 4)
+def play_by_play(leaderboard, player1, player2):
+
+    board = Board()
+    player1.set_symbol(player.X)
+    player2.set_symbol(player.O)
+    players = [player1, player2]
+    for game in range(2):
+        print("Playing game {}/2".format(game+1))
+        # play two games, swapping turn order
+        players = list(reversed(players))
+        players[0].set_symbol(player.X)
+        players[1].set_symbol(player.O)
+        print("Player {} ({}) is going first".format(players[0].me, players[0].weights))
+        print("Player {} ({}) is going second".format(players[1].me, players[1].weights))
+        board = Board()
+        turn = 0
+        while not player1.is_game_over(board):
+            current = players[turn % len(players)]
+            r, c = current.get_best_next_move(board)
+            board[r, c] = current.me
+            turn += 1
+            print("Turn #{}, after player {} moved:".format(turn, current.me))
+            print(board)
+        # increase score on leaderboard for winning player
+        leaderboard[player1] += player1.get_winning_count(board) > 0
+        leaderboard[player2] += player2.get_winning_count(board) > 0
 
 
 if __name__ == '__main__':
-    tally0 = {create_random_vhat(): 0 for _ in range(20)}
-    # top two players
+    leaderboard0 = {Competitor(): 0 for _ in range(20)}
+    player1 = Competitor([1, 5, -29, 30, 4, -15])
+    player1.generation = "ME"
+    # WOW, these random weights induce winning via corner case!
+    player2 = Competitor([5, 2, -12, 23, -1, -16])
+    leaderboard0[player1] = 0
+    leaderboard0[player2] = 0
+    play_by_play(leaderboard0, player1, player2)
+    raise
 
     generation = 0
-    tally, generation = play_round(tally0, generation)
+    leaderboard, generation = play_tournament_round(leaderboard0, generation)
     for _ in range(500):
         print(generation)
-        tally, generation = play_round(tally, generation)
+        leaderboard, generation = play_tournament_round(leaderboard, generation)
 
 
 
