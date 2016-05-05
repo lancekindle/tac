@@ -33,6 +33,18 @@ class Board(object):
         may access the board @ row 1, column 2 like so: board[1, 2]
         """
         row, col = indices
+        if isinstance(col, slice):
+            items = []
+            for c in range(*col.indices(3)):
+                items.append(self._board[row][c])
+            return items
+        if isinstance(row, slice):
+            items = []
+            for r in range(*row.indices(3)):
+                items.append(self._board[r][col])
+            return items
+        if isinstance(row, slice) and isinstance(col, slice):
+            raise IOError("nope nope nope, too much magic slice stuff, only one at a time pls")
         return self._board[row][col]
 
     def get_legal_moves(self):
