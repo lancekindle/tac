@@ -6,6 +6,7 @@ import random
 import copy
 from collections import defaultdict
 import itertools
+import numpy as np
 
 # ONCE AND FOR ALL
 from pprint import pprint
@@ -16,36 +17,22 @@ class player:
     BLANK = ' '
 
 class Board(object):
+
     def __init__(self):
-        self._board = [[player.BLANK]*3 for i in range(3)]
+        board = [[player.BLANK]*3 for i in range(3)]
+        self._board = np.array(board)
 
     def __setitem__(self, indices, val):
         """Set the value of the cell at 'row', 'col' to the value 'val',
         assuming cell is unoccupied"""
-        row, col = indices
-        if self._board[row][col] == player.BLANK:
-            self._board[row][col] = val
-        else:
-            raise ValueError("That's an invalid move you big dumb")
+        self._board.__setitem__(indices, val)
 
     def __getitem__(self, indices):
         """Get the value of the board cell at 'row', 'col'. As an example, you
         may access the board @ row 1, column 2 like so: board[1, 2]
+        OR get values of board, if row or column indices are slices.
         """
-        row, col = indices
-        if isinstance(col, slice):
-            items = []
-            for c in range(*col.indices(3)):
-                items.append(self._board[row][c])
-            return items
-        if isinstance(row, slice):
-            items = []
-            for r in range(*row.indices(3)):
-                items.append(self._board[r][col])
-            return items
-        if isinstance(row, slice) and isinstance(col, slice):
-            raise IOError("nope nope nope, too much magic slice stuff, only one at a time pls")
-        return self._board[row][col]
+        return self._board.__getitem__(indices)
 
     def get_legal_moves(self):
         """return list of tuples of all legal moves, where the tuple
