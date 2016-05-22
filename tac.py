@@ -198,10 +198,10 @@ class Competitor(object):
             for sequence in genre:
                 symbols = set([board[r, c] for r, c in sequence])
                 board_set = board_set | symbols
-                if len(symbols) == 1 and ' ' not in symbols:
+                if len(symbols) == 1 and player.BLANK not in symbols:
                     return True
         # If there are no blank spaces on the board
-        if ' ' not in board_set:
+        if player.BLANK not in board_set:
             # catskill reached
             return True
         return False
