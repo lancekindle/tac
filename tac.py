@@ -137,6 +137,7 @@ class Competitor(object):
             raise ValueError("Weights can only be a list of 6 numbers, has wrong length")
         self.weights = weights
         self.generation = 0
+        self.lost_games = set()
         # create a set of row/column/diagonal coordinates
         self.rows = []
         for r in range(3):
@@ -189,8 +190,8 @@ class Competitor(object):
 
     def get_near_complete_sequence_count(self, board):
         """return number of almost completed sequences where 2 of the
-        coordinates are occupied by "me" and the third square in the sequence
-        is open
+        coordinates are occupied by "me" and the third square in the
+        sequence is open
         """
         sequence_almost_done = lambda sequence: sequence.count(self.me) == 2 and \
                                sequence.count(player.BLANK) == 1
@@ -263,13 +264,21 @@ class Competitor(object):
             # catskill reached
             return True
         return False
+    
+    def remember_loss(self, board):
+        """call this function with the board on which this player lost.
+        The player will attempt to learn to avoid reaching this same
+        board state
+        """
+        if self.is_game_over(board):
+            raise ValueError('board should be in state prior to end-game')
+        board = board.normalized_copy()
+        self.lost_games.add(board)
 
-    def __str__(self):
+    def __repr__(self):
         """Oh i just love printing."""
         return str(self.weights) + ' ' + str(self.generation)
-
-    __repr__ = __str__
-
+    
     def __lt__(self, other):
         """is used if sort() tries to sort this instance. Just
         return a single number so that sorting does not affect these
@@ -296,8 +305,18 @@ def play_game(leaderboard, player1, player2):
             board[r, c] = current.me
             turn += 1
         # increase score on leaderboard for winning player
-        leaderboard[player1] += player1.get_winning_count(board) > 0
-        leaderboard[player2] += player2.get_winning_count(board) > 0
+        # inform losing player of loss (so it can learn)
+        player1_win = player1.get_winning_count(board) > 0
+        player2_win = player2.get_winning_count(board) > 0
+        # rewind previous move to replicate board before winning move
+        # played
+        board[r, c] = player.BLANK
+        if player1_win:
+            leaderboard[player1] += 1
+            player2.remember_loss(board)
+        elif player2_win:
+            leaderboard[player2] += 1
+            player1.remember_loss(board)
 
 
 def mix_genetics(parent1, parent2, generation_count):
@@ -351,7 +370,7 @@ def play_tournament_round(leaderboard, generation):
 # (22, [1, 12, -4, 16, 12, -2] 4)
 def play_by_play(leaderboard, player1, player2):
 
-    board = Board()
+    played = []
     player1.set_symbol(player.X)
     player2.set_symbol(player.O)
     players = [player1, player2]
@@ -375,6 +394,8 @@ def play_by_play(leaderboard, player1, player2):
         # increase score on leaderboard for winning player
         leaderboard[player1] += player1.get_winning_count(board) > 0
         leaderboard[player2] += player2.get_winning_count(board) > 0
+        played.append(board)
+    return played
 
 
 if __name__ == '__main__':
@@ -385,11 +406,16 @@ if __name__ == '__main__':
     player2 = Competitor([5, 2, -12, 23, -1, -16])
     leaderboard0[player1] = 0
     leaderboard0[player2] = 0
-    play_by_play(leaderboard0, player1, player2)
-    raise
+    b1, b2 = play_by_play(leaderboard0, player1, player2)
+    f = b1._flip(True)
+    x = b1.normalized_copy()
+
 
     generation = 0
     leaderboard, generation = play_tournament_round(leaderboard0, generation)
+    losers = [comp for comp, gen in leaderboard.items() if comp.lost_games]
+    lost = losers[0].lost_games
+    raise
     for _ in range(500):
         print(generation)
         leaderboard, generation = play_tournament_round(leaderboard, generation)
