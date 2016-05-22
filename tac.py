@@ -410,7 +410,6 @@ if __name__ == '__main__':
     f = b1._flip(True)
     x = b1.normalized_copy()
 
-
     generation = 0
     leaderboard, generation = play_tournament_round(leaderboard0, generation)
     losers = [comp for comp, gen in leaderboard.items() if comp.lost_games]
@@ -419,6 +418,7 @@ if __name__ == '__main__':
     for _ in range(500):
         print(generation)
         leaderboard, generation = play_tournament_round(leaderboard, generation)
+
 
 
 
