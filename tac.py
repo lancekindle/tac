@@ -270,6 +270,11 @@ class Competitor(object):
 
     __repr__ = __str__
 
+    def __lt__(self, other):
+        """is used if sort() tries to sort this instance. Just
+        return a single number so that sorting does not affect these
+        """
+        return 0
 
 
 def play_game(leaderboard, player1, player2):
