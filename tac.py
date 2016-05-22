@@ -22,6 +22,20 @@ class Board(object):
         board = [[player.BLANK]*3 for i in range(3)]
         self._board = np.array(board)
 
+    @classmethod
+    def from_string(cls, board):
+        """reconstruct a board out of a string"""
+        self = cls()
+        r, c = 0, 0
+        for character in board:
+            if character in (player.X, player.O, player.BLANK):
+                self[r, c] = character
+                c += 1
+            if c == 3:
+                c = 0
+                r += 1
+        return self
+
     def __setitem__(self, indices, val):
         """Set the value of the cell at 'row', 'col' to the value 'val',
         assuming cell is unoccupied"""
