@@ -59,28 +59,72 @@ class Board(object):
                     moves.append((r,c))
         return moves
 
+    def normalized_copy(self):
+        """rotate and flip board such that the lightest faces of the
+        board are at the top-left. This should make the board rotation
+        and flip equivalent, such that similar games will look exactly
+        the same. Return a new instance of the board
+        """
+        copy = self.copy()
+        leftside = copy[:, 0].tolist()
+        rightside = copy[:, 2].tolist()
+        topside = copy[0, :].tolist()
+        bottomside = copy[2, :].tolist()
+        left = 3 - leftside.count(player.BLANK)
+        right = 3 - rightside.count(player.BLANK)
+        top = 3 - topside.count(player.BLANK)
+        bottom = 3 - bottomside.count(player.BLANK)
+        if left > right:
+            copy = copy._flip(horizontal=True)
+        if top > bottom:
+            copy = copy._flip(vertical=True)
+        return copy
+
+    def _rotate(self, rotations):
+        """rotate a set number of rotations in the counter-clockwise
+        direction. Return rotated COPY of board
+        """
+        rotated = self.copy()
+        rotations %= 4
+        for _ in range(4):
+            rotated[:, 0] = self[0, :]
+            rotated[2, :] = self[:, 0]
+            rotated[:, 2] = self[2, :]
+            rotated[0, :] = self[:, 2]
+        return rotated
+
+    def _flip(self, vertical=False, horizontal=False):
+        """flip the board vertically or horizontally"""
+        flipped = self.copy()
+        if vertical:
+            flipped[2, :] = self[0, :]
+            flipped[0, :] = self[2, :]
+        else:
+            flipped[:, 2]= self[:, 0]
+            flipped[:, 0] = self[:, 2]
+        return flipped
 
     def copy(self):
         board = self.__class__()
         board._board = copy.deepcopy(self._board)
         return board
 
-    def __str__(self):
+    def __repr__(self):
         """Return visual representation of tic-tac-toe board"""
         return "─┼─┼─\n".join(["│".join(row)+'\n' for row in self._board])
 
 
 class Competitor(object):
-    """Competitor is responsible for evaluating a given board and returning a value
-    that represents (in arbitrary numerical form) the likelyhood of winning
-    this board game. In addition it contains a method "get_best_next_move"
-    which will evaluate any given board and return the move that it deems
-    best.
+    """Competitor is responsible for evaluating a given board and
+    returning a value that represents (in arbitrary numerical form) the
+    likelyhood of winning this board game. In addition it contains a
+    method "get_best_next_move" which will evaluate any given board and
+    return the move that it deems best.
 
     This numerical representation is calculated as a series of board
-    "markers" (such as how many 2-in a row's do I have?) multiplied by
-    a corresponding weight. The sum of these markers give an
-    approximation of the state of the board.
+    "markers" (such as how many 2-in a row's do I have?) multiplied by a
+    corresponding weight. The sum of these markers give an approximation
+    of the state of the board.
     """
 
     def __init__(self, weights=None):
